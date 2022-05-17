@@ -4,6 +4,7 @@
 #include <thread>
 #include <numbers>
 #include <cmath>
+#include <stdlib.h>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
@@ -39,8 +40,9 @@ GLuint g_vbo_handle = 0;
 GLuint g_vao_handle = 0;
 
 constexpr float fov = 45.0f;
-constexpr float ROTATION_SPEED = 0.5f;
-constexpr float CAMERA_SPEED = 1.0f;
+constexpr float TRANS_ROTATION_SPEED = 2.0f;
+constexpr float EYE_ROTATION_SPEED = 0.5f;
+constexpr float CAMERA_SPEED = 2.0f;
 
 static float vert_data[] = {
         -0.5, -0.5, 1.0,
@@ -70,6 +72,10 @@ void opengl_debug_callback(GLenum source,
 
 std::string get_shader_source(const char* file) {
     auto stream = std::ifstream(file, std::ios::in);
+    if(!stream.is_open()){
+        std::cout << "Shader file couldn't not be opened or does not exist";
+    }
+
     stream.seekg (0, stream.end);
     int length = stream.tellg();
     stream.seekg(0, stream.beg);
@@ -123,7 +129,7 @@ int main() {
     }
 
     glfwSetKeyCallback(wnd, key_callback);
-    glfwSwapInterval(1);
+    glfwSwapInterval(1); // sync your rendering loop to the refresh rate of the monitor
     init_gl(wnd);
 
     WorldState state {
@@ -150,13 +156,13 @@ int main() {
 }
 
 void init_gl(GLFWwindow* wnd) {
-    auto vert_src = get_shader_source("vert.glsl");
-    auto frag_src = get_shader_source("frag.glsl");
+    auto vert_src = get_shader_source("vert.glsl"); //get shader file
+    auto frag_src = get_shader_source("frag.glsl"); //get shader file
 
-    glDebugMessageCallback(opengl_debug_callback, nullptr);
+    glDebugMessageCallback(opengl_debug_callback, nullptr); //specify a callback to receive debugging messages from the GL
 
-    int vert_len = vert_src.length();
-    auto vert_str = vert_src.c_str();
+    int vert_len = vert_src.length(); //length of vertex shader string
+    auto vert_str = vert_src.c_str(); //makes a c string from the string object
     int frag_len = frag_src.length();
     auto frag_str = frag_src.c_str();
 
@@ -214,21 +220,28 @@ void update(GLFWwindow* wnd, WorldState& state) {
     glfwGetFramebufferSize(wnd, &width, &height);// |---*---|
 
     state.camera.proj = glm::perspective(45.0f, static_cast<float>(width)/height, 0.05f, 100.0f);
+    //fovy - Specifies the field of view angle, in degrees, in the y direction.
+    //aspect - Specifies the aspect ratio that determines the field of view in the x direction. The aspect ratio is the ratio of x (width) to y (height).
     //state.camera.proj = glm::ortho(-1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 100.0f);
 
     auto now = Clock::now();
     std::chrono::duration<float> elapsed = now - state.start_time;
-    float rads = std::fmod(elapsed.count() * ROTATION_SPEED, (2.0f * std::numbers::pi_v<float>));
+    float transRads = std::fmod(elapsed.count() * TRANS_ROTATION_SPEED, (2.0f * std::numbers::pi_v<float>));
 
     // M2 * M1 * v
     // v * M1 * M2
     // [A A 0]
     // [A A 0]
     // [T T 1]
-    state.model_state.transform = glm::mat4(std::cos(rads), -std::sin(rads), 0.0, 0.0,
-                                            std::sin(rads), std::cos(rads), 0.0, 0.0,
-                                            0.0, 0.0, 1.0, 0.0,
-                                            0.0, 0.0, elapsed.count()*0.5f, 1.0);
+//    state.model_state.transform = glm::mat4(std::cos(transRads), -std::sin(transRads), 0.0, 0.0,
+//                                            std::sin(transRads), std::cos(transRads), 0.0, 0.0,
+//                                            0.0, 0.0, 1.0, 0.0,
+//                                            0.0, 0.0, 0, 1.0);
+
+    float eyeRads = std::fmod(elapsed.count() * EYE_ROTATION_SPEED, (2.0f * std::numbers::pi_v<float>));
+
+    state.camera.eye.x = 3 * std::cos(eyeRads); //rotates camera around (0,0,0)
+    state.camera.eye.z = 3 * std::sin(eyeRads);
 
     if (glfwGetKey(wnd, GLFW_KEY_W) == GLFW_PRESS) {
         state.camera.eye.y += CAMERA_SPEED / FPS;
@@ -242,9 +255,19 @@ void update(GLFWwindow* wnd, WorldState& state) {
     if (glfwGetKey(wnd, GLFW_KEY_D) == GLFW_PRESS) {
         state.camera.eye.x += CAMERA_SPEED / FPS;
     }
+    if (glfwGetKey(wnd, GLFW_KEY_H) == GLFW_PRESS) {
+        state.camera.eye.z -= CAMERA_SPEED / FPS;
+    }
+    if (glfwGetKey(wnd, GLFW_KEY_N) == GLFW_PRESS) {
+        state.camera.eye.z += CAMERA_SPEED / FPS;
+    }
     // Make it so we always look straight down the Z
-    state.camera.target.x = state.camera.eye.x;
-    state.camera.target.y = state.camera.eye.y;
+    //state.camera.target.x = state.camera.eye.x; //by commenting these lines out, we are always looking at (0, 0, 0)
+    //state.camera.target.y = state.camera.eye.y;
+
+    std::cout << "eye.x: " << state.camera.eye.x << "\n";
+    std::cout << "eye.y: " << state.camera.eye.y << "\n";
+    std::cout << "eye.z: " << state.camera.eye.z << "\n\n";
 }
 
 void draw(GLFWwindow* wnd, const WorldState& state) {
@@ -256,9 +279,9 @@ void draw(GLFWwindow* wnd, const WorldState& state) {
 
     auto view = glm::lookAt(state.camera.eye, state.camera.target, glm::vec3(0.0, 1.0, 0.0));
 
-    glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(state.model_state.transform));
-    glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(view));
-    glUniformMatrix4fv(2, 1, GL_FALSE, glm::value_ptr(state.camera.proj));
+    glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(state.model_state.transform)); //triangle transformation
+    glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(view)); //camera position
+    glUniformMatrix4fv(2, 1, GL_FALSE, glm::value_ptr(state.camera.proj)); //glm::perspective for fov and clipping planes
 
     glBindVertexArray(g_vao_handle);
     glDrawArrays(GL_TRIANGLES, 0, 3);
