@@ -38,17 +38,65 @@ Geometry load_geometry(const void* vert_data, const I* index_data);
 GLuint g_program_handle = 0;
 GLuint g_vbo_handle = 0;
 GLuint g_vao_handle = 0;
+GLuint g_eao_handle = 0;
 
 constexpr float fov = 45.0f;
-constexpr float TRANS_ROTATION_SPEED = 2.0f;
-constexpr float EYE_ROTATION_SPEED = 0.5f;
+constexpr float TRANS_ROTATION_SPEED = 1.0f;
+constexpr float EYE_ROTATION_SPEED = 1.5f;
 constexpr float CAMERA_SPEED = 2.0f;
 
 static float vert_data[] = {
-        -0.5, -0.5, 1.0,
-        0.0, 0.5, 1.0,
-        0.5, -0.5, 1.0,
+        //front
+        -0.5, -0.5, 0.5, //bottom left     0
+        1.0, 0.0, 0.0,//1
+
+        0.5, 0.5, 0.5,   //top right       2
+        0.0, 1.0, 0.0, //3
+
+        0.5, -0.5, 0.5,  //bottom right    4
+        1.0, 0.0, 0.0, //5
+
+        -0.5, 0.5, 0.5,//top left        6
+        0.0, 1.0, 0.0, //7
+
+
+        //back
+        -0.5, -0.5, -0.5,//bottom left  8
+        1.0, 0.0, 0.0, //9
+
+        0.5, 0.5, -0.5,  //top right    10
+        0.0, 1.0, 0.0, //11
+
+
+        0.5, -0.5, -0.5, //bottom right 12
+        1.0, 0.0, 0.0,   //13
+
+
+        -0.5, 0.5, -0.5,  //top left     14
+        0.0, 1.0, 0.0, //15
 };
+
+unsigned int indices[] = {
+        0, 2, 4, //front
+        0, 2, 6,
+
+        8, 10, 12, //back
+        8, 10, 14,
+
+        2, 6, 10, //top
+        10, 14, 6,
+
+        0, 4, 8, //bottom
+        8, 12, 4,
+
+        4, 12, 2, //side right
+        2, 10, 12,
+
+        0, 8, 6, //side left
+        8, 6, 14,
+};
+
+int numFaces = sizeof(indices) / 6;
 
 struct CameraState {
     glm::vec3 eye = glm::vec3(0.0, 0.0, 0.0);
@@ -198,13 +246,20 @@ void init_gl(GLFWwindow* wnd) {
 
     glGenBuffers(1, &g_vbo_handle);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo_handle);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(float)*9, vert_data, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vert_data), vert_data, GL_STATIC_DRAW);
 
     glGenVertexArrays(1, &g_vao_handle);
     glBindVertexArray(g_vao_handle);
     glBindBuffer(GL_ARRAY_BUFFER, g_vbo_handle);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float)*3, nullptr);
+    glEnableVertexAttribArray(1);
+
+    glGenBuffers(1, &g_eao_handle);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_eao_handle);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float)*3, nullptr); //wouldn't the stride need to be 6 floats?
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float)*3, (void*)(sizeof(float)*3));
     glBindVertexArray(0);
 
     glDisable(GL_DEPTH_TEST);
@@ -240,8 +295,12 @@ void update(GLFWwindow* wnd, WorldState& state) {
 
     float eyeRads = std::fmod(elapsed.count() * EYE_ROTATION_SPEED, (2.0f * std::numbers::pi_v<float>));
 
-    state.camera.eye.x = 3 * std::cos(eyeRads); //rotates camera around (0,0,0)
-    state.camera.eye.z = 3 * std::sin(eyeRads);
+    //state.camera.eye.x = 3 * std::cos(eyeRads); //rotates camera around (0,0,0)
+    //state.camera.eye.z = 3 * std::sin(eyeRads);
+
+    float y_rot = 0;
+
+    glm::distance(state.camera.eye, state.camera.target);
 
     if (glfwGetKey(wnd, GLFW_KEY_W) == GLFW_PRESS) {
         state.camera.eye.y += CAMERA_SPEED / FPS;
@@ -261,13 +320,27 @@ void update(GLFWwindow* wnd, WorldState& state) {
     if (glfwGetKey(wnd, GLFW_KEY_N) == GLFW_PRESS) {
         state.camera.eye.z += CAMERA_SPEED / FPS;
     }
+    if (glfwGetKey(wnd, GLFW_KEY_Q) == GLFW_PRESS) {
+        y_rot -= EYE_ROTATION_SPEED / FPS;
+    }
+    if (glfwGetKey(wnd, GLFW_KEY_E) == GLFW_PRESS) {
+        y_rot += EYE_ROTATION_SPEED / FPS;
+    }
+
+    //rotate camera around y axis
+    auto camAroundY = glm::mat3(std::cos(y_rot), 0, -std::sin(y_rot),
+                                  0, 1, 0,
+                                  std::sin(y_rot), 0, std::cos(y_rot));
+
+    state.camera.eye = camAroundY * state.camera.eye;
+
     // Make it so we always look straight down the Z
     //state.camera.target.x = state.camera.eye.x; //by commenting these lines out, we are always looking at (0, 0, 0)
     //state.camera.target.y = state.camera.eye.y;
 
-    std::cout << "eye.x: " << state.camera.eye.x << "\n";
-    std::cout << "eye.y: " << state.camera.eye.y << "\n";
-    std::cout << "eye.z: " << state.camera.eye.z << "\n\n";
+//    std::cout << "eye.x: " << state.camera.eye.x << "\n";
+//    std::cout << "eye.y: " << state.camera.eye.y << "\n";
+//    std::cout << "eye.z: " << state.camera.eye.z << "\n\n";
 }
 
 void draw(GLFWwindow* wnd, const WorldState& state) {
@@ -284,7 +357,7 @@ void draw(GLFWwindow* wnd, const WorldState& state) {
     glUniformMatrix4fv(2, 1, GL_FALSE, glm::value_ptr(state.camera.proj)); //glm::perspective for fov and clipping planes
 
     glBindVertexArray(g_vao_handle);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glDrawElements(GL_TRIANGLES, numFaces * 6, GL_UNSIGNED_INT, 0);
 }
 
 void opengl_debug_callback(GLenum source,
