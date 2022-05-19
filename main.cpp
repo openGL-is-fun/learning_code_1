@@ -77,23 +77,23 @@ static float vert_data[] = {
 };
 
 unsigned int indices[] = {
-        0, 2, 4, //front
+        0, 1, 2, //front
         0, 2, 6,
 
-        8, 10, 12, //back
-        8, 10, 14,
+        4, 5, 6, //back
+        4, 5, 7,
 
-        2, 6, 10, //top
-        10, 14, 6,
+        1, 3, 5, //top
+        5, 7, 3,
 
-        0, 4, 8, //bottom
-        8, 12, 4,
+        0, 2, 4, //bottom
+        4, 6, 2,
 
-        4, 12, 2, //side right
-        2, 10, 12,
+        2, 6, 1, //side right
+        1, 5, 6,
 
-        0, 8, 6, //side left
-        8, 6, 14,
+        0, 4, 3, //side left
+        4, 3, 7,
 };
 
 int numFaces = sizeof(indices) / 6;
@@ -258,8 +258,8 @@ void init_gl(GLFWwindow* wnd) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_eao_handle);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float)*3, nullptr); //wouldn't the stride need to be 6 floats?
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float)*3, (void*)(sizeof(float)*3));
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float)*6, nullptr); //wouldn't the stride need to be 6 floats?
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float)*6, (void*)(sizeof(float)*3));
     glBindVertexArray(0);
 
     glDisable(GL_DEPTH_TEST);
