@@ -13,18 +13,9 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
+#include "scene.h"
+
 struct WorldState;
-
-struct ModelState {
-    glm::mat4 transform = glm::identity<glm::mat3>();
-};
-
-struct Geometry {
-    GLuint vbo = 0;
-    GLuint ibo = 0;
-    GLuint vao = 0;
-    ModelState state;
-};
 
 using Clock = std::chrono::high_resolution_clock;
 
@@ -36,67 +27,11 @@ template <typename V, typename I>
 Geometry load_geometry(const void* vert_data, const I* index_data);
 
 GLuint g_program_handle = 0;
-GLuint g_vbo_handle = 0;
-GLuint g_vao_handle = 0;
-GLuint g_eao_handle = 0;
 
 constexpr float fov = 45.0f;
 constexpr float TRANS_ROTATION_SPEED = 1.0f;
 constexpr float EYE_ROTATION_SPEED = 1.5f;
 constexpr float CAMERA_SPEED = 2.0f;
-
-static float vert_data[] = {
-        //front
-        -0.5, -0.5, 0.5, //bottom left     0
-        1.0, 0.0, 0.0,//1
-
-        0.5, 0.5, 0.5,   //top right       2
-        0.0, 1.0, 0.0, //3
-
-        0.5, -0.5, 0.5,  //bottom right    4
-        1.0, 0.0, 0.0, //5
-
-        -0.5, 0.5, 0.5,//top left        6
-        0.0, 1.0, 0.0, //7
-
-
-        //back
-        -0.5, -0.5, -0.5,//bottom left  8
-        1.0, 0.0, 0.0, //9
-
-        0.5, 0.5, -0.5,  //top right    10
-        0.0, 1.0, 0.0, //11
-
-
-        0.5, -0.5, -0.5, //bottom right 12
-        1.0, 0.0, 0.0,   //13
-
-
-        -0.5, 0.5, -0.5,  //top left     14
-        0.0, 1.0, 0.0, //15
-};
-
-unsigned int indices[] = {
-        0, 1, 2, //front
-        0, 2, 6,
-
-        4, 5, 6, //back
-        4, 5, 7,
-
-        1, 3, 5, //top
-        5, 7, 3,
-
-        0, 2, 4, //bottom
-        4, 6, 2,
-
-        2, 6, 1, //side right
-        1, 5, 6,
-
-        0, 4, 3, //side left
-        4, 3, 7,
-};
-
-int numFaces = sizeof(indices) / 6;
 
 struct CameraState {
     glm::vec3 eye = glm::vec3(0.0, 0.0, 0.0);
@@ -108,6 +43,7 @@ struct WorldState {
     CameraState camera;
     ModelState model_state;
     Clock::time_point start_time = Clock::now();
+    Scene scene;
 };
 
 void opengl_debug_callback(GLenum source,
@@ -188,7 +124,8 @@ int main() {
         },
         .model_state = {
             .transform = glm::identity<glm::mat4>(),
-        }
+        },
+        .scene = build_scene(),
     };
 
     while(!glfwWindowShouldClose(wnd)) {
@@ -244,25 +181,8 @@ void init_gl(GLFWwindow* wnd) {
         throw std::runtime_error("Linking shader failed");
     }
 
-    glGenBuffers(1, &g_vbo_handle);
-    glBindBuffer(GL_ARRAY_BUFFER, g_vbo_handle);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vert_data), vert_data, GL_STATIC_DRAW);
-
-    glGenVertexArrays(1, &g_vao_handle);
-    glBindVertexArray(g_vao_handle);
-    glBindBuffer(GL_ARRAY_BUFFER, g_vbo_handle);
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
-
-    glGenBuffers(1, &g_eao_handle);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_eao_handle);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float)*6, nullptr); //wouldn't the stride need to be 6 floats?
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(float)*6, (void*)(sizeof(float)*3));
-    glBindVertexArray(0);
-
-    glDisable(GL_DEPTH_TEST);
+    //glDisable(GL_DEPTH_TEST);
+    glEnable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glDisable(GL_BLEND);
 
@@ -351,13 +271,14 @@ void draw(GLFWwindow* wnd, const WorldState& state) {
     glUseProgram(g_program_handle);
 
     auto view = glm::lookAt(state.camera.eye, state.camera.target, glm::vec3(0.0, 1.0, 0.0));
-
-    glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(state.model_state.transform)); //triangle transformation
     glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(view)); //camera position
     glUniformMatrix4fv(2, 1, GL_FALSE, glm::value_ptr(state.camera.proj)); //glm::perspective for fov and clipping planes
 
-    glBindVertexArray(g_vao_handle);
-    glDrawElements(GL_TRIANGLES, numFaces * 6, GL_UNSIGNED_INT, 0);
+    for(const auto& geom : state.scene.geometry) {
+        glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(geom.state.transform)); //triangle transformation
+        glBindVertexArray(geom.vao);
+        glDrawElements(geom.type, geom.elem_count, geom.index_type, 0);
+    }
 }
 
 void opengl_debug_callback(GLenum source,
