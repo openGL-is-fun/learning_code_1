@@ -1,10 +1,8 @@
 #include <chrono>
 #include <fstream>
 #include <iostream>
-#include <thread>
 #include <numbers>
 #include <cmath>
-#include <stdlib.h>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
@@ -23,9 +21,6 @@ void update(GLFWwindow* wnd, WorldState& state);
 void draw(GLFWwindow* wnd, const WorldState& state);
 void init_gl(GLFWwindow* wnd);
 
-template <typename V, typename I>
-Geometry load_geometry(const void* vert_data, const I* index_data);
-
 GLuint g_program_handle = 0;
 
 constexpr float fov = 45.0f;
@@ -36,6 +31,7 @@ constexpr float CAMERA_SPEED = 2.0f;
 struct CameraState {
     glm::vec3 eye = glm::vec3(0.0, 0.0, 0.0);
     glm::vec3 target = glm::vec3(0.0, 0.0, 0.0);
+    glm::vec3 up = glm::vec3(0.0, 1.0, 0.0);
     glm::mat4 proj = glm::identity<glm::mat4>();
 };
 
@@ -215,10 +211,8 @@ void update(GLFWwindow* wnd, WorldState& state) {
 
     float eyeRads = std::fmod(elapsed.count() * EYE_ROTATION_SPEED, (2.0f * std::numbers::pi_v<float>));
 
-    //state.camera.eye.x = 3 * std::cos(eyeRads); //rotates camera around (0,0,0)
-    //state.camera.eye.z = 3 * std::sin(eyeRads);
-
     float y_rot = 0;
+    float x_rot = 0;
 
     glm::distance(state.camera.eye, state.camera.target);
 
@@ -246,13 +240,37 @@ void update(GLFWwindow* wnd, WorldState& state) {
     if (glfwGetKey(wnd, GLFW_KEY_E) == GLFW_PRESS) {
         y_rot += EYE_ROTATION_SPEED / FPS;
     }
+    if (glfwGetKey(wnd, GLFW_KEY_Z) == GLFW_PRESS) {
+        x_rot -= EYE_ROTATION_SPEED / FPS;
+    }
+    if (glfwGetKey(wnd, GLFW_KEY_X) == GLFW_PRESS) {
+        x_rot += EYE_ROTATION_SPEED / FPS;
+    }
+    //state.camera.phi = std::clamp(state.camera.phi, 0.0f, std::numbers::pi_v<float>);
 
     //rotate camera around y axis
     auto camAroundY = glm::mat3(std::cos(y_rot), 0, -std::sin(y_rot),
                                   0, 1, 0,
                                   std::sin(y_rot), 0, std::cos(y_rot));
+    auto camAroundX = glm::mat3(1.0, 0.0, 0.0,
+                                0.0, std::cos(x_rot), -std::sin(x_rot),
+                                0.0, std::sin(x_rot), std::cos(x_rot));
 
-    state.camera.eye = camAroundY * state.camera.eye;
+    /**
+            auto radius = state.camera.r;
+    state.camera.eye.x = radius*std::cos(state.camera.phi)*std::sin(state.camera.theta);
+    state.camera.eye.y = radius*std::sin(state.camera.phi)*std::sin(state.camera.theta);
+    state.camera.eye.z = radius*std::cos(state.camera.theta);
+
+    auto forward = glm::normalize(glm::abs(state.camera.eye - state.camera.target));
+    auto right = glm::cross(forward, glm::vec3(0.0, 1.0, 0.0));
+    auto up = glm::cross(right, forward);
+
+    std::cout << state.camera.theta << ", " << state.camera.phi << std::endl;
+    **/
+
+    state.camera.eye = camAroundY * camAroundX * state.camera.eye;
+
 
     // Make it so we always look straight down the Z
     //state.camera.target.x = state.camera.eye.x; //by commenting these lines out, we are always looking at (0, 0, 0)
@@ -270,7 +288,7 @@ void draw(GLFWwindow* wnd, const WorldState& state) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glUseProgram(g_program_handle);
 
-    auto view = glm::lookAt(state.camera.eye, state.camera.target, glm::vec3(0.0, 1.0, 0.0));
+    auto view = glm::lookAt(state.camera.eye, state.camera.target, state.camera.up);
     glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(view)); //camera position
     glUniformMatrix4fv(2, 1, GL_FALSE, glm::value_ptr(state.camera.proj)); //glm::perspective for fov and clipping planes
 
@@ -290,25 +308,4 @@ void opengl_debug_callback(GLenum source,
                            const void* userParam) {
     std::cout << "OGL Debug: Source: " << source << " -- Type " << type << " -- ID " << id << " Severity: " << severity
               << " Msg: " << message << std::endl;
-}
-
-template <typename V, typename I>
-Geometry load_geometry(const void* vert_data, std::size_t vert_len, const I* index_data) {
-    GLuint vbo, ibo, vao;
-    glGenBuffers(1, &vbo);
-    glGenBuffers(1, &ibo);
-    glGenVertexArrays(1, &vao);
-
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-    glBindVertexArray(vao);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(V), nullptr);
-    glBindVertexArray(0);
-
-    return Geometry {
-        .vbo = vbo,
-        .ibo = ibo,
-        .vao = vao,
-    };
 }
