@@ -4,6 +4,7 @@
 
 #include "geometry.h"
 
+#include <iostream>
 #include <cstdint>
 #include <array>
 
@@ -29,8 +30,8 @@ void create_cube(void* out, unsigned int* index_out, std::size_t offset, std::si
         5, 7, 6,
     };
     constexpr int NUM_VERT = 8;
-    auto target = ptr_to_obj<float>(out, offset, stride, 0);
-    if (stride == 0) {
+    auto target = ptr_to_obj<float>(out, offset, stride, 0); //for base index. already assuming the pointer exists down below
+    if (stride == 0) { //means you are only setting the position and you aren't needing to pass over other data to get to the position again
         stride = sizeof(float)*3;
     }
 
@@ -47,6 +48,7 @@ void create_cube(void* out, unsigned int* index_out, std::size_t offset, std::si
 
         //target = reinterpret_cast<float*>(static_cast<uint8_t*>(out) + offset + stride*i);
         target = ptr_to_obj<float>(out, offset, stride, i+1);
+
     }
 
     for(auto idx : indices) {

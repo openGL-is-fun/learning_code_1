@@ -274,6 +274,11 @@ void draw(GLFWwindow* wnd, const WorldState& state) {
     glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(view)); //camera position
     glUniformMatrix4fv(2, 1, GL_FALSE, glm::value_ptr(state.camera.proj)); //glm::perspective for fov and clipping planes
 
+    glUniform4fv(3, 1, glm::value_ptr(glm::vec4(1,1,1,1))); //light color in fragment shader
+    glUniform3fv(4, 1, glm::value_ptr(glm::vec3(3.0, 3.0, 1.0))); //light position
+
+    //glm::cross for normal and glsl normalize to make it a unit vector
+
     for(const auto& geom : state.scene.geometry) {
         glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(geom.state.transform)); //triangle transformation
         glBindVertexArray(geom.vao);
